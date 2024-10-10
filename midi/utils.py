@@ -58,15 +58,14 @@ def create_folders(args):
 
 def to_dense(data, dataset_info, device=None):
     X, node_mask = to_dense_batch(x=data.x, batch=data.batch)
-    pos, _ = to_dense_batch(x=data.pos, batch=data.batch)
-    pos = pos.float()
-    assert pos.mean(dim=1).abs().max() < 1e-3
-    charges, _ = to_dense_batch(x=data.charges, batch=data.batch)
+    embed, _ = to_dense_batch(x=data.embed, batch=data.batch)
+    embed = embed.float()
+    assert embed.mean(dim=1).abs().max() < 1e-3
     max_num_nodes = X.size(1)
     edge_index, edge_attr = remove_self_loops(data.edge_index, data.edge_attr)
     E = to_dense_adj(edge_index=edge_index, batch=data.batch, edge_attr=edge_attr, max_num_nodes=max_num_nodes)
 
-    X, charges, E = dataset_info.to_one_hot(X, charges=charges, E=E, node_mask=node_mask)
+    X, E = dataset_info.to_one_hot(X, E=E, node_mask=node_mask)
 
     y = X.new_zeros((X.shape[0], 0))
 
@@ -74,18 +73,17 @@ def to_dense(data, dataset_info, device=None):
         X = X.to(device)
         E = E.to(device)
         y = y.to(device)
-        pos = pos.to(device)
+        embed = embed.to(device)
         node_mask = node_mask.to(device)
 
-    data = PlaceHolder(X=X, charges=charges, pos=pos, E=E, y=y,  node_mask=node_mask)
+    data = PlaceHolder(X=X, embed=embed, E=E, y=y,  node_mask=node_mask)
     return data.mask()
 
 
 class PlaceHolder:
-    def __init__(self, pos, X, charges, E, y, t_int=None, t=None, node_mask=None):
-        self.pos = pos
+    def __init__(self, embed, X, E, y, t_int=None, t=None, node_mask=None):
+        self.embed = embed
         self.X = X
-        self.charges = charges
         self.E = E
         self.y = y
         self.t_int = t_int
@@ -94,9 +92,8 @@ class PlaceHolder:
 
     def device_as(self, x: torch.Tensor):
         """ Changes the device and dtype of X, E, y. """
-        self.pos = self.pos.to(x.device) if self.pos is not None else None
+        self.embed = self.embed.to(x.device) if self.embed is not None else None
         self.X = self.X.to(x.device) if self.X is not None else None
-        self.charges = self.charges.to(x.device) if self.charges is not None else None
         self.E = self.E.to(x.device) if self.E is not None else None
         self.y = self.y.to(x.device) if self.y is not None else None
         return self
@@ -114,39 +111,34 @@ class PlaceHolder:
 
         if self.X is not None:
             self.X = self.X * x_mask
-        if self.charges is not None:
-            self.charges = self.charges * x_mask
         if self.E is not None:
             self.E = self.E * e_mask1 * e_mask2 * diag_mask
-        if self.pos is not None:
-            self.pos = self.pos * x_mask
-            self.pos = self.pos - self.pos.mean(dim=1, keepdim=True)
-        assert torch.allclose(self.E, torch.transpose(self.E, 1, 2))
+        if self.embed is not None:
+            self.embed = self.embed * x_mask
+            self.embed = self.embed - self.embed.mean(dim=1, keepdim=True)
+        assert torch.allclose(self.E, torch.transembede(self.E, 1, 2))
         return self
 
-    def collapse(self, collapse_charges):
+    def collapse(self):
         copy = self.copy()
         copy.X = torch.argmax(self.X, dim=-1)
-        copy.charges = collapse_charges.to(self.charges.device)[torch.argmax(self.charges, dim=-1)]
         copy.E = torch.argmax(self.E, dim=-1)
         x_mask = self.node_mask.unsqueeze(-1)  # bs, n, 1
         e_mask1 = x_mask.unsqueeze(2)  # bs, n, 1, 1
         e_mask2 = x_mask.unsqueeze(1)  # bs, 1, n, 1
         copy.X[self.node_mask == 0] = - 1
-        copy.charges[self.node_mask == 0] = 1000
         copy.E[(e_mask1 * e_mask2).squeeze(-1) == 0] = - 1
         return copy
 
     def __repr__(self):
-        return (f"pos: {self.pos.shape if type(self.pos) == torch.Tensor else self.pos} -- " +
+        return (f"embed: {self.embed.shape if type(self.embed) == torch.Tensor else self.embed} -- " +
                 f"X: {self.X.shape if type(self.X) == torch.Tensor else self.X} -- " +
-                f"charges: {self.charges.shape if type(self.charges) == torch.Tensor else self.charges} -- " +
                 f"E: {self.E.shape if type(self.E) == torch.Tensor else self.E} -- " +
                 f"y: {self.y.shape if type(self.y) == torch.Tensor else self.y}")
 
 
     def copy(self):
-        return PlaceHolder(X=self.X, charges=self.charges, E=self.E, y=self.y, pos=self.pos, t_int=self.t_int, t=self.t,
+        return PlaceHolder(X=self.X, E=self.E, y=self.y, embed=self.embed, t_int=self.t_int, t=self.t,
                            node_mask=self.node_mask)
 
 
