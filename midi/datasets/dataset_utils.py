@@ -6,22 +6,19 @@ from torch_geometric.data import Data
 from torch_geometric.utils import subgraph
 
 
-def mol_to_torch_geometric(mol, atom_encoder):
-    adj = torch.from_numpy(Chem.rdmolops.GetAdjacencyMatrix(mol, useBO=True))
+def tree_to_torch_geometric(tree, mol_encoder):
+    mol_types, adj = tree.get_adjacency()
+    adj = torch.from_numpy(adj)
     edge_index = adj.nonzero().contiguous().T
-    bond_types = adj[edge_index[0], edge_index[1]]
-    bond_types[bond_types == 1.5] = 4
-    edge_attr = bond_types.long()
+    rxn_types = adj[edge_index[0], edge_index[1]]
+    edge_attr = rxn_types.long()
 
-    embed = torch.tensor(mol.GetConformers()[0].GetPositions()).float()
+    embed = torch.tensor([mol.data['embedding'] for mol in mol_types])
     embed = embed - torch.mean(embed, dim=0, keepdim=True)
-    atom_types = []
-    for atom in mol.GetAtoms():
-        atom_types.append(atom_encoder[atom.GetSymbol()])
 
-    atom_types = torch.Tensor(atom_types).long()
+    mol_types = torch.Tensor(mol_types).long()
 
-    data = Data(x=atom_types, edge_index=edge_index, edge_attr=edge_attr, embed=embed)
+    data = Data(x=mol_types, edge_index=edge_index, edge_attr=edge_attr, embed=embed)
     return data
 
 
@@ -36,8 +33,8 @@ def load_pickle(path):
 
 
 class Statistics:
-    def __init__(self, num_nodes, atom_types, bond_types):
+    def __init__(self, num_nodes, mol_types, rxn_types):
         self.num_nodes = num_nodes
         print("NUM NODES IN STATISTICS", num_nodes)
-        self.atom_types = atom_types
-        self.bond_types = bond_types
+        self.mol_types = mol_types
+        self.rxn_types = rxn_types
