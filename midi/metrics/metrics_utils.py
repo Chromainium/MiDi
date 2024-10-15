@@ -24,13 +24,13 @@ def molecules_to_datalist(trees):
     return data_list
 
 
-def compute_all_statistics(data_list, atom_encoder):
+def compute_all_statistics(data_list, mol_encoder):
     num_nodes = node_counts(data_list)
-    mol_types = mol_type_counts(data_list, num_classes=len(atom_encoder))
-    print(f"Atom types: {atom_types}")
-    bond_types = edge_counts(data_list)
-    print(f"Bond types: {bond_types}")
-    return Statistics(num_nodes=num_nodes, atom_types=atom_types, bond_types=bond_types)
+    mol_types = mol_type_counts(data_list, num_classes=len(mol_encoder))
+    print(f"Molecule types: {mol_types}")
+    rxn_types = edge_counts(data_list)
+    print(f"Reaction types: {rxn_types}")
+    return Statistics(num_nodes=num_nodes, mol_types=mol_types, rxn_types=rxn_types)
 
 
 def node_counts(data_list):
@@ -55,9 +55,9 @@ def mol_type_counts(data_list, num_classes):
     return counts
 
 
-def edge_counts(data_list, num_bond_types=5):
+def edge_counts(data_list, num_rxn_types=2):
     print("Computing edge counts...")
-    d = np.zeros(num_bond_types)
+    d = np.zeros(num_rxn_types)
 
     for data in data_list:
         total_pairs = data.num_nodes * (data.num_nodes - 1)
@@ -66,7 +66,7 @@ def edge_counts(data_list, num_bond_types=5):
         num_non_edges = total_pairs - num_edges
         assert num_non_edges >= 0
 
-        edge_types = torch.nn.functional.one_hot(data.edge_attr - 1, num_classes=num_bond_types - 1).sum(dim=0).numpy()
+        edge_types = torch.nn.functional.one_hot(data.edge_attr - 1, num_classes=num_rxn_types - 1).sum(dim=0).numpy()
         d[0] += num_non_edges
         d[1:] += edge_types
 
