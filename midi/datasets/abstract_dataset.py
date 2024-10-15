@@ -83,27 +83,6 @@ class Mixin:
         d = d / d.sum()
         return d
 
-    def valency_count(self, max_n_nodes):
-        valencies = torch.zeros(3 * max_n_nodes - 2)  # Max valency possible if everything is connected
-
-        multiplier = torch.Tensor([0, 1, 2, 3, 1.5])
-
-        for split in ['train', 'val', 'test']:
-            for i, batch in enumerate(self.dataloaders[split]):
-                for data in batch:
-                    if data is None:
-                        continue
-
-                    n = data.x.shape[0]
-
-                    for atom in range(n):
-                        edges = data.edge_attr[data.edge_index[0] == atom]
-                        edges_total = edges.sum(dim=0)
-                        valency = (edges_total * multiplier).sum()
-                        valencies[valency.long().item()] += 1
-        valencies = valencies / valencies.sum()
-        return valencies
-
 
 
 class AbstractDataModule(Mixin, LightningDataset):
@@ -141,8 +120,5 @@ class AbstractDatasetInfos:
         self.n_nodes = n_nodes / n_nodes.sum()
         self.atom_types = statistics['train'].atom_types
         self.edge_types = statistics['train'].bond_types
-        self.charges_types = statistics['train'].charge_types
-        self.charges_marginals = (self.charges_types * self.atom_types[:, None]).sum(dim=0)
-        self.valency_distribution = statistics['train'].valencies
         self.max_n_nodes = len(n_nodes) - 1
         self.nodes_dist = DistributionNodes(n_nodes)
