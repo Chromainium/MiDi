@@ -594,29 +594,15 @@ class SiCE(CEPerClass):
         super().__init__(i)
 
 
-class NoBondCE(CEPerClass):
+class NoRxnCE(CEPerClass):
     def __init__(self, i):
         super().__init__(i)
 
 
-class SingleCE(CEPerClass):
+class RxnCE(CEPerClass):
     def __init__(self, i):
         super().__init__(i)
 
-
-class DoubleCE(CEPerClass):
-    def __init__(self, i):
-        super().__init__(i)
-
-
-class TripleCE(CEPerClass):
-    def __init__(self, i):
-        super().__init__(i)
-
-
-class AromaticCE(CEPerClass):
-    def __init__(self, i):
-        super().__init__(i)
 
 
 class AtomMetricsCE(MetricCollection):
@@ -633,33 +619,30 @@ class AtomMetricsCE(MetricCollection):
         super().__init__(metrics_list)
 
 
-class BondMetricsCE(MetricCollection):
+class RxnMetricsCE(MetricCollection):
     def __init__(self):
-        ce_no_bond = NoBondCE(0)
-        ce_SI = SingleCE(1)
-        ce_DO = DoubleCE(2)
-        ce_TR = TripleCE(3)
-        ce_AR = AromaticCE(4)
-        super().__init__([ce_no_bond, ce_SI, ce_DO, ce_TR, ce_AR])
+        ce_no_rxn = NoRxnCE(0)
+        ce_rxn = RxnCE(1)
+        super().__init__([ce_no_rxn, ce_rxn])
 
 
 class TrainMolecularMetrics(nn.Module):
     def __init__(self, dataset_infos):
         super().__init__()
         # self.train_atom_metrics = AtomMetricsCE(dataset_infos=dataset_infos)
-        # self.train_bond_metrics = BondMetricsCE()
+        # self.train_rxn_metrics = RxnMetricsCE()
 
     def forward(self, masked_pred, masked_true, log: bool):
         return None
         self.train_atom_metrics(masked_pred.X, masked_true.X)
-        self.train_bond_metrics(masked_pred.E, masked_true.E)
+        self.train_rxn_metrics(masked_pred.E, masked_true.E)
         if not log:
             return
 
         to_log = {}
         for key, val in self.train_atom_metrics.compute().items():
             to_log['train/' + key] = val.item()
-        for key, val in self.train_bond_metrics.compute().items():
+        for key, val in self.train_rxn_metrics.compute().items():
             to_log['train/' + key] = val.item()
         if wandb.run:
             wandb.log(to_log, commit=False)
@@ -667,18 +650,18 @@ class TrainMolecularMetrics(nn.Module):
 
     def reset(self):
         return
-        for metric in [self.train_atom_metrics, self.train_bond_metrics]:
+        for metric in [self.train_atom_metrics, self.train_rxn_metrics]:
             metric.reset()
 
     def log_epoch_metrics(self, current_epoch, local_rank):
         return
         epoch_atom_metrics = self.train_atom_metrics.compute()
-        epoch_bond_metrics = self.train_bond_metrics.compute()
+        epoch_rxn_metrics = self.train_rxn_metrics.compute()
 
         to_log = {}
         for key, val in epoch_atom_metrics.items():
             to_log['train_epoch/' + key] = val.item()
-        for key, val in epoch_bond_metrics.items():
+        for key, val in epoch_rxn_metrics.items():
             to_log['train_epoch/' + key] = val.item()
 
         if wandb.run:
@@ -686,9 +669,9 @@ class TrainMolecularMetrics(nn.Module):
 
         for key, val in epoch_atom_metrics.items():
             epoch_atom_metrics[key] = round(val.item(), 3)
-        for key, val in epoch_bond_metrics.items():
-            epoch_bond_metrics[key] = round(val.item(), 3)
-        print(f"Epoch {current_epoch} on rank {local_rank}: {epoch_atom_metrics} -- {epoch_bond_metrics}")
+        for key, val in epoch_rxn_metrics.items():
+            epoch_rxn_metrics[key] = round(val.item(), 3)
+        print(f"Epoch {current_epoch} on rank {local_rank}: {epoch_atom_metrics} -- {epoch_rxn_metrics}")
 
         return to_log
 
